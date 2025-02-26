@@ -1,7 +1,10 @@
 package burundi.ilucky.jwt;
 
 import java.util.Date;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Component;
 
 import burundi.ilucky.model.User;
@@ -17,6 +20,7 @@ import lombok.extern.log4j.Log4j2;
 @Component
 @Log4j2
 public class JwtTokenProvider {
+    private final Set<String> blacklistedTokens = ConcurrentHashMap.newKeySet();
 
     private final String JWT_SECRET = "ilucky";
 
@@ -58,4 +62,26 @@ public class JwtTokenProvider {
         }
         return false;
     }
+
+
+    // Kiểm tra token có trong blacklist không
+    public boolean isTokenBlacklisted(String token) {
+        return blacklistedTokens.contains(token);
+    }
+
+    // Thêm token vào blacklist
+    public void invalidateToken(String token) {
+        blacklistedTokens.add(token);
+    }
+
+    // Trích xuất token từ request (dùng cho controller)
+    public String resolveToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
+    }
+
+
 }

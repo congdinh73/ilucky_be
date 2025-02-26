@@ -4,6 +4,9 @@ import burundi.ilucky.model.Gift;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+
+import static java.util.Map.entry;
 
 @Service
 public class GiftService {
@@ -39,13 +42,39 @@ public class GiftService {
         gifts.put("UNLUCKY", new Gift("UNLUCKY", "Chúc bạn may mắn lần sau", 1, "UNLUCKY"));
     }
 
+    private static final Map<String, Double> GIFT_PROBABILITIES = Map.ofEntries(
+            entry("10000VND", 0.01),
+            entry("1000VND", 0.02),
+            entry("500VND", 0.03),
+            entry("200VND", 0.05),
+            entry("SAMSUNG1", 0.07),
+            entry("SAMSUNG2", 0.07),
+            entry("SAMSUNG3", 0.05),
+            entry("SAMSUNG4", 0.07),
+            entry("L", 0.05),
+            entry("I", 0.02),
+            entry("T", 0.05),
+            entry("E", 0.05),
+            entry("SHARE", 0.08),
+            entry("5STARS", 0.10),
+            entry("55STARS", 0.08),
+            entry("555STARS", 0.06),
+            entry("5555STARS", 0.05),
+            entry("UNLUCKY", 0.09)
+    );
+
     public static Gift getRandomGift() {
-        List<String> keys = new ArrayList<>(gifts.keySet());
+        double randomValue = ThreadLocalRandom.current().nextDouble();
+        double cumulativeProbability = 0.0;
 
-        Random random = new Random();
+        for (Map.Entry<String, Double> entry : GIFT_PROBABILITIES.entrySet()) {
+            cumulativeProbability += entry.getValue();
+            if (randomValue < cumulativeProbability) {
+                return gifts.get(entry.getKey());
+            }
+        }
 
-        String randomKey = keys.get(random.nextInt(keys.size()));
 
-        return gifts.get(randomKey);
+        return gifts.get("UNLUCKY");
     }
 }

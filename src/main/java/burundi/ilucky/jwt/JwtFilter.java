@@ -36,19 +36,30 @@ public class JwtFilter extends OncePerRequestFilter {
 		try {
 			String jwt = getJwtFromRequest(request);
 
-			if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-				Long userId = tokenProvider.getUserIdFromJWT(jwt);
-				UserDetails userDetails = customUserDetailsService.loadUserById(userId);
-				if (userDetails != null) {
-					UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-							userDetails, null, userDetails.getAuthorities());
-					authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+			// Kiểm tra token có trong danh sách đen không
+			if (StringUtils.hasText(jwt) && tokenProvider.isTokenBlacklisted(jwt)) {
+				response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token has been invalidated");
+				return; // Dừng xử lý nếu token bị vô hiệu
+			}
 
-					SecurityContextHolder.getContext().setAuthentication(authentication);
+			if (StringUtils.hasText(jwt)){
+				// Validate token và xác thực người dùng
+				if (tokenProvider.validateToken(jwt)) {
+					Long userId = tokenProvider.getUserIdFromJWT(jwt);
+					UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+
+					if (userDetails != null) {
+						UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+								userDetails, null, userDetails.getAuthorities());
+						authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+						SecurityContextHolder.getContext().setAuthentication(authentication);
+					}
 				}
 			}
 		} catch (Exception ex) {
-			log.error("failed on set user authentication", ex);
+			log.error("Authentication failed: ", ex);
+			response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
+			return;
 		}
 
 		filterChain.doFilter(request, response);

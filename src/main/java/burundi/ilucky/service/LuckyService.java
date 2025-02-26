@@ -9,13 +9,12 @@ import burundi.ilucky.repository.UserRepository;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -78,4 +77,58 @@ public class LuckyService {
     	return luckyGiftHistoriesDTO;
     }
 
+
+    public Optional<User> buyPlayTurns(User user, int turns, int costPerTurn, String currencyType) {
+        if (user == null || turns <= 0 || costPerTurn <= 0) {
+            log.warn("Invalid purchase request.");
+            return Optional.empty();
+        }
+
+        int totalCost = turns * costPerTurn;
+
+        // Checking currency
+        if (currencyType.equalsIgnoreCase("VND")) {
+            if (user.getTotalVnd() < totalCost) {
+                log.warn("User {} does not have enough VND.", user.getId());
+                return Optional.empty();
+            }
+            user.setTotalVnd(user.getTotalVnd() - totalCost);
+        } else if (currencyType.equalsIgnoreCase("STARS")) {
+            if (user.getTotalStar() < totalCost) {
+                log.warn("User {} does not have enough STARS.", user.getId());
+                return Optional.empty();
+            }
+            user.setTotalStar(user.getTotalStar() - totalCost);
+        } else {
+            log.warn("Invalid currency type: {}", currencyType);
+            return Optional.empty();
+        }
+
+        // Update play turn
+        user.setTotalPlay(user.getTotalPlay() + turns);
+        userRepository.save(user);
+        log.info("User {} purchased {} play turns using {}.", user.getId(), turns, currencyType);
+
+        return Optional.of(user);
+    }
+
+    @Scheduled(cron = "0 0 0 * * *") // Run at 00:00
+    public void giveDailyFreePlays() {
+        log.info("Giving daily free plays to all users.");
+        List<User> users = userRepository.findAll();
+        for (User user : users) {
+            user.setTotalPlay(user.getTotalPlay() + 5);
+            try {
+                userRepository.save(user);
+                log.info("Gave 5 free plays to user {}.", user.getId());
+            } catch (Exception e) {
+                log.error("Error giving free plays to user {}: {}", user.getId(), e.getMessage(), e);
+            }
+        }
+        log.info("Finished giving daily free plays to all users.");
+    }
+
+    public List<Object[]> getTopUsersByStars() {
+        return luckyHistoryRepository.findTopUsersByStars();
+    }
 }

@@ -3,6 +3,8 @@ package burundi.ilucky.controller;
 import burundi.ilucky.jwt.JwtTokenProvider;
 import burundi.ilucky.model.User;
 import burundi.ilucky.payload.*;
+import burundi.ilucky.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +29,13 @@ public class AuthController {
 	@Autowired
 	private AuthenticationManager authenticationManager;
 
+	@Autowired
+	private JwtTokenProvider jwtTokenProvider;
+
+	@Autowired
+	private UserService userService;
+
+
 	@PostMapping
 	public ResponseEntity<?> auth(@Valid @RequestBody AuthRequest authRequest) {
 
@@ -40,4 +49,16 @@ public class AuthController {
 		AuthResponse authResponse = new AuthResponse(jwt);
 		return ResponseEntity.ok().body(authResponse);
 	}
+
+	@PostMapping("/logout")
+	public ResponseEntity<Response> logout(HttpServletRequest request) {
+		String token = jwtTokenProvider.resolveToken(request);
+		if (token != null) {
+			userService.logout(token);
+		}
+		return ResponseEntity.ok(new Response("SUCCESS", "Logged out successfully"));
+	}
 }
+
+
+
