@@ -9,12 +9,15 @@ import burundi.ilucky.repository.UserRepository;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,45 +30,55 @@ public class LuckyService {
     @Autowired
     private LuckyHistoryRepository luckyHistoryRepository;
 
-    public List<LuckyHistory> getHistoriesByUserId(Long userId) {
-        return luckyHistoryRepository.findByUserIdOrderByAddTimeDesc(userId);
+    public Page<LuckyHistory> getHistoriesByUserId(Long userId, Pageable pageable) {
+        return luckyHistoryRepository.findByUserIdOrderByAddTimeDesc(userId, pageable);
     }
 
-    public Gift lucky(User user) {
-        Gift gift = GiftService.getRandomGift();
 
-        LuckyHistory luckyHistory = new LuckyHistory();
-        if(gift.getType().equals("VND")) {
-            user.setTotalVnd(user.getTotalVnd() + gift.getNoItem());
-        } else if(gift.getType().equals("STARS")) {
-            user.setTotalStar(user.getTotalStar() + gift.getNoItem());
-        }
+    @Async("customTaskExecutor")
+    public CompletableFuture<Gift> lucky(User user) {
+        return CompletableFuture.supplyAsync(() -> {
+            Gift gift = GiftService.getRandomGift();
 
-        luckyHistory.setGiftType(gift.getType());
-        luckyHistory.setAddTime(new Date());
-        luckyHistory.setGiftId(gift.getId());
-        luckyHistory.setNoItem(gift.getNoItem());
-        luckyHistory.setUser(user);
-        luckyHistoryRepository.save(luckyHistory);
+            LuckyHistory luckyHistory = new LuckyHistory();
+            if (gift.getType().equals("VND")) {
+                user.setTotalVnd(user.getTotalVnd() + gift.getNoItem());
+            } else if (gift.getType().equals("STARS")) {
+                user.setTotalStar(user.getTotalStar() + gift.getNoItem());
+            }
 
-        user.setTotalPlay(user.getTotalPlay() - 1);
-        userRepository.save(user);
+            luckyHistory.setGiftType(gift.getType());
+            luckyHistory.setAddTime(new Date());
+            luckyHistory.setGiftId(gift.getId());
+            luckyHistory.setNoItem(gift.getNoItem());
+            luckyHistory.setUser(user);
 
-        return gift;
+            luckyHistoryRepository.save(luckyHistory);
+
+            user.setTotalPlay(user.getTotalPlay() - 1);
+            userRepository.save(user);
+
+            return gift;
+        });
     }
-    public Gift lucky() {
-        Gift gift = GiftService.getRandomGift();
 
-        LuckyHistory luckyHistory = new LuckyHistory();
-        luckyHistory.setGiftType(gift.getType());
-        luckyHistory.setAddTime(new Date());
-        luckyHistory.setGiftId(gift.getId());
-        luckyHistory.setNoItem(gift.getNoItem());
-        luckyHistoryRepository.save(luckyHistory);
+    @Async("customTaskExecutor")
+    public CompletableFuture<Gift> lucky() {
+        return CompletableFuture.supplyAsync(() -> {
+            Gift gift = GiftService.getRandomGift();
 
-        return gift;
+            LuckyHistory luckyHistory = new LuckyHistory();
+            luckyHistory.setGiftType(gift.getType());
+            luckyHistory.setAddTime(new Date());
+            luckyHistory.setGiftId(gift.getId());
+            luckyHistory.setNoItem(gift.getNoItem());
+            luckyHistoryRepository.save(luckyHistory);
+
+            return gift;
+        });
     }
-    public List<LuckyHistoryDTO> convertLuckyHistoriesToDTO(List<LuckyHistory> luckyGiftHistories) {
+
+    public List<LuckyHistoryDTO> convertLuckyHistoriesToDTO(Page<LuckyHistory> luckyGiftHistories) {
     	List<LuckyHistoryDTO> luckyGiftHistoriesDTO = new ArrayList<>();
     	
     	for(LuckyHistory item: luckyGiftHistories) {
