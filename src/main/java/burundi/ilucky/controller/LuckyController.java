@@ -12,6 +12,9 @@ import burundi.ilucky.service.LuckyService;
 import burundi.ilucky.service.UserService;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,9 +22,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/lucky")
@@ -42,37 +44,53 @@ public class LuckyController {
     @PostMapping("/play")
     public ResponseEntity<?> play(@AuthenticationPrincipal UserDetails userDetails) {
         try {
-
-            if(userDetails != null) {
+            if (userDetails != null) {
                 User user = userService.findByUserName(userDetails.getUsername());
 
-                if(user.getTotalPlay() <= 0) {
+                if (user.getTotalPlay() <= 0) {
                     return ResponseEntity.ok(new Response("FAILED", "Bạn đã hết lượt chơi. Mua thêm để chơi tiếp"));
                 } else {
-                    Gift gift = luckyService.lucky(user);
+                    CompletableFuture<Gift> futureGift = luckyService.lucky(user);
+                    Gift gift = futureGift.get();
                     return ResponseEntity.ok(new LuckyResponse("OK", gift, user.getTotalPlay()));
                 }
             } else {
-                Gift gift = luckyService.lucky();
+                CompletableFuture<Gift> futureGift = luckyService.lucky();
+                Gift gift = futureGift.get();
                 return ResponseEntity.ok(new LuckyResponse("OK", gift));
             }
         } catch (Exception e) {
+            log.error("Error playing lucky game", e);
             return ResponseEntity.internalServerError().build();
         }
     }
 
     @PostMapping("/history")
-    public ResponseEntity<?> history(@AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<?> history(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
         try {
+            Pageable pageable = PageRequest.of(page, size);
+
             if(userDetails != null) {
                 User user = userService.findByUserName(userDetails.getUsername());
-                List<LuckyHistory> luckyHistories = luckyService.getHistoriesByUserId(user.getId());
+                Page<LuckyHistory> luckyHistories = luckyService.getHistoriesByUserId(user.getId(), pageable);
                 List<LuckyHistoryDTO> luckyGiftHistoriesDTO = luckyService.convertLuckyHistoriesToDTO(luckyHistories);
-                return ResponseEntity.ok(luckyGiftHistoriesDTO);
+
+                Map<String, Object> response = new HashMap<>();
+                response.put("histories", luckyGiftHistoriesDTO);
+                response.put("currentPage", luckyHistories.getNumber());
+                response.put("totalPages", luckyHistories.getTotalPages());
+                response.put("totalItems", luckyHistories.getTotalElements());
+
+                return ResponseEntity.ok(response);
             } else {
-                List<LuckyHistory> luckyHistories = luckyService.getHistoriesByUserId(null);
+                Page<LuckyHistory> luckyHistories = luckyService.getHistoriesByUserId(null,  pageable);
                 List<LuckyHistoryDTO> luckyGiftHistoriesDTO = luckyService.convertLuckyHistoriesToDTO(luckyHistories);
+
                 return ResponseEntity.ok(luckyGiftHistoriesDTO);
+
             }
 
         } catch (Exception e) {
